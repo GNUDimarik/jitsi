@@ -757,6 +757,51 @@ public class OperationSetMultiUserChatJabberImpl
                 MultiUserChat.addInvitationListener(
                     jabberProvider.getConnection(),
                     new SmackInvitationListener());
+
+                String account = System.getProperty("chatroom_to_join.account",
+                                                    "");
+
+                if (account.equals(jabberProvider.getAccountID().getUserID()))
+                {
+                    String chatRoomName = System.getProperty("chatroom_to_join",
+                                                             "");
+
+                    if (!chatRoomName.isEmpty())
+                    {
+                        try
+                        {
+                            ChatRoom chatRoom = createChatRoom(chatRoomName,
+                                                               null);
+                            String nickname
+                                = System.getProperty("chatroom_to_join.nickname",
+                                                     "");
+                            String password
+                                = System.getProperty("chatroom_to_join.password",
+                                                     "");
+
+                            if (!nickname.isEmpty())
+                            {
+                                if (!password.isEmpty())
+                                {
+                                    chatRoom.joinAs(nickname, password.getBytes());
+                                }
+                                else
+                                {
+                                    chatRoom.joinAs(nickname);
+                                }
+                            }
+                            else
+                            {
+                                chatRoom.join();
+                            }
+                        }
+                        catch (OperationFailedException
+                            | OperationNotSupportedException e)
+                        {
+                            logger.error("failed to create chat room", e);
+                        }
+                    }
+                }
             }
             else if (evt.getNewState() == RegistrationState.UNREGISTERED
                 || evt.getNewState() == RegistrationState.CONNECTION_FAILED)

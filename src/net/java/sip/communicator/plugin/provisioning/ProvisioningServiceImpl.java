@@ -107,7 +107,6 @@ public class ProvisioningServiceImpl
     private static final String PROVISIONING_ENFORCE_PREFIX_PROP
         = "provisioning.ENFORCE_PREFIX";
 
-
     /**
      * List of allowed configuration prefixes.
      */
@@ -128,7 +127,6 @@ public class ProvisioningServiceImpl
      * set as a system property.
      */
     private static final String SYSTEM_PROP_PREFIX = "${system}.";
-
      /**
       * Constructor.
       */
@@ -144,7 +142,6 @@ public class ProvisioningServiceImpl
              ProvisioningActivator.getConfigurationService().setProperty(
                  PROVISIONING_UUID_PROP, uuid);
          }
-
      }
 
      /**
@@ -755,6 +752,14 @@ public class ProvisioningServiceImpl
                     checkEnforcePrefix((String)value);
                     continue;
                 }
+                else if (key.equals("chatroom_to_join") ||
+                         key.equals("chatroom_to_join.nickname") ||
+                         key.equals("chatroom_to_join.password") ||
+                         key.equals("chatroom_to_join.account"))
+                {
+                    processChatRoomProperty(key, value);
+                    continue;
+                }
 
                 /* check that properties is allowed */
                 if(!isPrefixAllowed(key))
@@ -866,6 +871,14 @@ public class ProvisioningServiceImpl
             logger.info(key + "=" + value);
     }
 
+    private void processChatRoomProperty(String key, Object value)
+    {
+        if (value != null && value instanceof String &&
+            !((String) value).isEmpty())
+         {
+             System.setProperty(key, (String) value);
+         }
+    }
     /**
      * Walk through all properties and make sure all properties keys match
      * a specific set of prefixes defined in configuration.
