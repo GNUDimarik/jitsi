@@ -123,6 +123,8 @@ public interface MetaContactListService
      */
     public MetaContact findMetaContactByContact(Contact contact);
 
+    public List<MetaContact> findMetaContactsByContact(Contact contact);
+
     /**
      * Returns the MetaContactGroup encapsulating the specified protocol contact
      * group or null if no such MetaContactGroup was found.

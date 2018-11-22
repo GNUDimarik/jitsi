@@ -355,9 +355,11 @@ public class ContactSipImpl
      * @return a reference to the <tt>ContactGroupSipImpl</tt> that
      * contains this contact.
      */
-    public ContactGroup getParentContactGroup()
+    public List<ContactGroup> getParentContactGroup()
     {
-        return this.parentGroup;
+        List<ContactGroup> groups = new ArrayList<>();
+        groups.add(this.parentGroup);
+        return groups;
     }
 
     /**

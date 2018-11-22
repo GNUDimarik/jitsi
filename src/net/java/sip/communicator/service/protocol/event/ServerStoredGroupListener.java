@@ -63,4 +63,10 @@ public interface ServerStoredGroupListener
      */
     public void groupResolved(ServerStoredGroupEvent evt);
 
+    /**
+     * Called when contact removed from group
+     * @param evt a ServerStoredGroupEvent containing the details of the
+     * operation.
+     */
+    public void contactRemoved(ServerStoredGroupEvent evt);
 }

@@ -17,6 +17,8 @@
  */
 package net.java.sip.communicator.service.protocol.event;
 
+import java.util.List;
+
 import net.java.sip.communicator.service.protocol.*;
 
 /**
@@ -104,7 +106,7 @@ public class ContactPropertyChangeEvent
      * @return a reference to the <tt>ContactGroup</tt> instance that contains
      * the source <tt>Contact</tt>.
      */
-    public ContactGroup getParentContactGroup()
+    public List<ContactGroup> getParentContactGroup()
     {
         return getSourceContact().getParentContactGroup();
     }

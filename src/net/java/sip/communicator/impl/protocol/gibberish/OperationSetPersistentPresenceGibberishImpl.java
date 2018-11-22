@@ -222,45 +222,48 @@ public class OperationSetPersistentPresenceGibberishImpl
         ContactGibberishImpl gibberishContact
             = (ContactGibberishImpl)contactToMove;
 
-        ContactGroupGibberishImpl parentGibberishGroup
+        List<ContactGroupGibberishImpl> parentGibberishGroups
             = findContactParent(gibberishContact);
 
-        parentGibberishGroup.removeContact(gibberishContact);
-
-        //if this is a volatile contact then we haven't really subscribed to
-        //them so we'd need to do so here
-        if(!gibberishContact.isPersistent())
+        for (ContactGroupGibberishImpl parentGibberishGroup
+            : parentGibberishGroups)
         {
-            //first tell everyone that the volatile contact was removed
-            fireSubscriptionEvent(gibberishContact
-                                  , parentGibberishGroup
-                                  , SubscriptionEvent.SUBSCRIPTION_REMOVED);
-
-            try
+            parentGibberishGroup.removeContact(gibberishContact);
+            //if this is a volatile contact then we haven't really subscribed to
+            //them so we'd need to do so here
+            if(!gibberishContact.isPersistent())
             {
-                //now subscribe
-                this.subscribe(newParent, contactToMove.getAddress());
-
-                //now tell everyone that we've added the contact
+                //first tell everyone that the volatile contact was removed
                 fireSubscriptionEvent(gibberishContact
-                                      , newParent
-                                      , SubscriptionEvent.SUBSCRIPTION_CREATED);
-            }
-            catch (Exception ex)
-            {
-                logger.error("Failed to move contact "
-                             + gibberishContact.getAddress()
-                             , ex);
-            }
-        }
-        else
-        {
-            ( (ContactGroupGibberishImpl) newParent)
-                    .addContact(gibberishContact);
-
-            fireSubscriptionMovedEvent(contactToMove
                                       , parentGibberishGroup
-                                       , newParent);
+                                      , SubscriptionEvent.SUBSCRIPTION_REMOVED);
+
+                try
+                {
+                    //now subscribe
+                    this.subscribe(newParent, contactToMove.getAddress());
+
+                    //now tell everyone that we've added the contact
+                    fireSubscriptionEvent(gibberishContact
+                                          , newParent
+                                          , SubscriptionEvent.SUBSCRIPTION_CREATED);
+                }
+                catch (Exception ex)
+                {
+                    logger.error("Failed to move contact "
+                                 + gibberishContact.getAddress()
+                                 , ex);
+                }
+            }
+            else
+            {
+                ( (ContactGroupGibberishImpl) newParent)
+                        .addContact(gibberishContact);
+
+                fireSubscriptionMovedEvent(contactToMove
+                                          , parentGibberishGroup
+                                           , newParent);
+            }
         }
     }
 
@@ -306,10 +309,13 @@ public class OperationSetPersistentPresenceGibberishImpl
 
             PresenceStatus oldStatus = contact.getPresenceStatus();
             contact.setPresenceStatus(status);
+
+            List<ContactGroup> groups = contact.getParentContactGroup();
+            ContactGroup group = groups.isEmpty() ? null : groups.get(0);
             contact.getParentPresenceOperationSet()
                 .fireContactPresenceStatusChangeEvent(
                     contact
-                    , contact.getParentContactGroup()
+                    , group
                     , oldStatus);
 
         }
@@ -352,9 +358,14 @@ public class OperationSetPersistentPresenceGibberishImpl
     {
         PresenceStatus oldStatus = contact.getPresenceStatus();
         contact.setPresenceStatus(newStatus);
+        List<ContactGroupGibberishImpl> parentGibberishGroups
+            = findContactParent(contact);
 
-        fireContactPresenceStatusChangeEvent(
-                contact, findContactParent(contact), oldStatus);
+        for (ContactGroupGibberishImpl group : parentGibberishGroups)
+        {
+            fireContactPresenceStatusChangeEvent(
+                    contact, group, oldStatus);
+        }
     }
 
     /**
@@ -420,11 +431,19 @@ public class OperationSetPersistentPresenceGibberishImpl
      * @return the ContactGroupGibberishImpl instance that gibberishContact
      * belongs to or null if no parent was found.
      */
-    public ContactGroupGibberishImpl findContactParent(
+    public List<ContactGroupGibberishImpl> findContactParent(
                                         ContactGibberishImpl gibberishContact)
     {
-        return (ContactGroupGibberishImpl)gibberishContact
-                                                .getParentContactGroup();
+        List<ContactGroup> groups = gibberishContact
+            .getParentContactGroup();
+        List<ContactGroupGibberishImpl> gibberishGroups = new ArrayList<>();
+
+        for (ContactGroup group : groups)
+        {
+            gibberishGroups.add((ContactGroupGibberishImpl) group);
+        }
+
+        return gibberishGroups;
     }
 
 
@@ -682,10 +701,11 @@ public class OperationSetPersistentPresenceGibberishImpl
             .getParentContactGroup();
 
         parentGroup.removeContact((ContactGibberishImpl)contact);
-
+        List<ContactGroup> groups = contact.getParentContactGroup();
+        ContactGroup group = groups.isEmpty() ? null : groups.get(0);
         fireSubscriptionEvent(
             contact,
-            contact.getParentContactGroup(),
+            group,
             SubscriptionEvent.SUBSCRIPTION_REMOVED);
     }
 
@@ -936,10 +956,11 @@ public class OperationSetPersistentPresenceGibberishImpl
                         continue;
 
                     contact.setPresenceStatus(GibberishStatusEnum.OFFLINE);
-
+                    List<ContactGroup> groups = contact.getParentContactGroup();
+                    ContactGroup parent = groups.isEmpty() ? null : groups.get(0);
                     fireContactPresenceStatusChangeEvent(
                         contact
-                        , contact.getParentContactGroup()
+                        , parent
                         , oldContactStatus);
                 }
             }

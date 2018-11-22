@@ -601,6 +601,38 @@ public class MetaContactGroupImpl
         return null;
     }
 
+    public List<MetaContact> findMetaContactsByContact(Contact protoContact)
+    {
+        List<MetaContact> contacts = new ArrayList<>();
+        //first go through the contacts that are direct children of this method.
+        Iterator<MetaContact> contactsIter = getChildContacts();
+
+        while(contactsIter.hasNext())
+        {
+            MetaContact mContact = contactsIter.next();
+
+            Contact storedProtoContact = mContact.getContact(
+                protoContact.getAddress(), protoContact.getProtocolProvider());
+
+            if( storedProtoContact != null)
+                contacts.add(mContact);
+        }
+
+        //if we didn't find it here, let's try in the subgroups
+        Iterator<MetaContactGroup> groupsIter = getSubgroups();
+
+        while( groupsIter.hasNext() )
+        {
+            MetaContactGroupImpl mGroup = (MetaContactGroupImpl) groupsIter.next();
+
+            MetaContact mContact = mGroup.findMetaContactByContact(
+                                                                protoContact);
+
+            if (mContact != null)
+                contacts.add(mContact);
+        }
+        return contacts;
+    }
     /**
      * Returns a meta contact, a child of this group or its subgroups, with
      * address equald to <tt>contactAddress</tt> and a source protocol provider

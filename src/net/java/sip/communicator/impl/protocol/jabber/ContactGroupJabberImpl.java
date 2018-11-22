@@ -118,23 +118,9 @@ public class ContactGroupJabberImpl
         if(rosterGroup != null)
             this.nameCopy = rosterGroup.getName();
 
-        while (groupMembers.hasNext())
+        if (groupMembers != null)
         {
-            RosterEntry rEntry = groupMembers.next();
-
-            if(!ServerStoredContactListJabberImpl.isEntryDisplayable(rEntry))
-                continue;
-
-            //only add the buddy if it doesn't already exist in some other group
-            //this is necessary because XMPP would allow having one and the
-            //same buddy in more than one group.
-            if(ssclCallback.findContactById(rEntry.getUser()) != null)
-            {
-                continue;
-            }
-
-            addContact(
-                new ContactJabberImpl(rEntry, ssclCallback, true, true));
+            addAll(groupMembers);
         }
     }
 
@@ -183,6 +169,31 @@ public class ContactGroupJabberImpl
         buddies.put(contact.getAddress().toLowerCase(), contact);
     }
 
+    public void addAll(Iterator<RosterEntry> groupMembers)
+    {
+        while (groupMembers.hasNext())
+        {
+            RosterEntry rEntry = groupMembers.next();
+
+            if(!ServerStoredContactListJabberImpl.isEntryDisplayable(rEntry))
+                continue;
+
+            //only add the buddy if it doesn't already exist in some other group
+            //this is necessary because XMPP would allow having one and the
+            //same buddy in more than one group.
+            ContactJabberImpl contact
+                = ssclCallback.findContactById(rEntry.getUser());
+
+            if(contact != null)
+            {
+                addContact(contact);
+                continue;
+            }
+
+            addContact(
+                new ContactJabberImpl(rEntry, ssclCallback, true, true));
+        }
+    }
 
     /**
      * Removes the specified contact from this contact group

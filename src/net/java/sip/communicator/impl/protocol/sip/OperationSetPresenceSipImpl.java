@@ -1453,11 +1453,13 @@ public class OperationSetPresenceSipImpl
             throw new NullPointerException("contact");
 
         contact.setResolved(true);
+        List<ContactGroup> groups = contact.getParentContactGroup();
+        ContactGroup group = groups.isEmpty() ? null : groups.get(0);
 
         // inform the listeners that the contact is created
         this.fireSubscriptionEvent(
                 contact,
-                contact.getParentContactGroup(),
+                group,
                 SubscriptionEvent.SUBSCRIPTION_RESOLVED);
 
         if (logger.isDebugEnabled())
@@ -1645,8 +1647,11 @@ public class OperationSetPresenceSipImpl
         PresenceStatus oldStatus = contact.getPresenceStatus();
 
         contact.setPresenceStatus(newStatus);
+        List<ContactGroup> groups = contact.getParentContactGroup();
+        ContactGroup group = groups.isEmpty() ? null : groups.get(0);
+
         fireContactPresenceStatusChangeEvent(
-                contact, contact.getParentContactGroup(), oldStatus);
+                contact, group, oldStatus);
     }
 
     /**
@@ -3264,9 +3269,12 @@ public class OperationSetPresenceSipImpl
                 }
                 contact.setPresenceStatus(
                         sipStatusEnum.getStatus(SipStatusEnum.OFFLINE));
+                List<ContactGroup> groups = contact.getParentContactGroup();
+                ContactGroup group = groups.isEmpty() ? null : groups.get(0);
+
                 fireContactPresenceStatusChangeEvent(
                         contact
-                        , contact.getParentContactGroup()
+                        , group
                         , oldContactStatus);
             }
 
@@ -3579,8 +3587,10 @@ public class OperationSetPresenceSipImpl
                         // create it, and add to parent, later will be resolved
                         if(resolveContactID(contact.getAddress()) == null)
                         {
-                            ContactGroup parentGroup =
+                            List<ContactGroup> groups =
                                 contact.getParentContactGroup();
+                            ContactGroup parentGroup =
+                                groups.isEmpty() ? null : groups.get(0);
                             ((ContactGroupSipImpl) parentGroup)
                                 .addContact(contact);
 

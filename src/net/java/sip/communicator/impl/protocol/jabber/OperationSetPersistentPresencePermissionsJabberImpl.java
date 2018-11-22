@@ -110,7 +110,21 @@ public class OperationSetPersistentPresencePermissionsJabberImpl
     @Override
     public boolean isReadOnly(Contact contact)
     {
-        return isReadOnly(contact.getParentContactGroup());
+        List<ContactGroup> groups = contact.getParentContactGroup();
+        boolean readOnly = false;
+
+        for (ContactGroup group : groups)
+        {
+            readOnly = isReadOnly(group);
+
+            // if at least one group is read only let's assume it for all
+            if (readOnly)
+            {
+                break;
+            }
+        }
+
+        return readOnly;
     }
 
     /**

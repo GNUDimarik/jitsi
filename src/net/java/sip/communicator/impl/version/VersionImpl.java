@@ -83,7 +83,7 @@ public class VersionImpl
      */
     private VersionImpl()
     {
-        super(VERSION_MAJOR, VERSION_MINOR, NightlyBuildID.BUILD_ID);
+        super(VERSION_MAJOR, VERSION_MINOR, "0");
     }
 
     /**

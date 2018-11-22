@@ -363,7 +363,7 @@ public class ContactJabberImpl
      * a child of or null if the underlying protocol does not support persistent
      * presence.
      */
-    public ContactGroup getParentContactGroup()
+    public List<ContactGroup> getParentContactGroup()
     {
         return ssclCallback.findContactGroup(this);
     }

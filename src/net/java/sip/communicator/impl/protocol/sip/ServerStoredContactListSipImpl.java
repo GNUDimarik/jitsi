@@ -170,9 +170,11 @@ public class ServerStoredContactListSipImpl
 
         ContactSipImpl newContact = parentOperationSet.resolveContactID(
                 contactAddress.getURI().toString());
+        List<ContactGroup> groups = newContact.getParentContactGroup();
+        ContactGroup group = groups.isEmpty() ? null : groups.get(0);
 
         if(newContact != null && !newContact.isPersistent() &&
-                !newContact.getParentContactGroup().isPersistent())
+                !group.isPersistent())
         {
             // this is a contact from not in contact list group
             // we must remove it
@@ -261,8 +263,10 @@ public class ServerStoredContactListSipImpl
         if(logger.isTraceEnabled())
             logger.trace("removeContact " + contact.getUri());
 
+        List<ContactGroup> groups = contact.getParentContactGroup();
+        ContactGroup group = groups.isEmpty() ? null : groups.get(0);
         ContactGroupSipImpl parentGroup =
-                (ContactGroupSipImpl) contact.getParentContactGroup();
+                (ContactGroupSipImpl) group;
         parentGroup.removeContact(contact);
         if (contact.isPersistent())
         {
@@ -334,8 +338,10 @@ public class ServerStoredContactListSipImpl
                     "Contact " + contact.getUri() + " already exists.",
                     OperationFailedException.SUBSCRIPTION_ALREADY_EXISTS);
         }
+        List<ContactGroup> groups = contact.getParentContactGroup();
+        ContactGroup group = groups.isEmpty() ? null : groups.get(0);
         ContactGroupSipImpl oldParentGroup =
-                (ContactGroupSipImpl) contact.getParentContactGroup();
+                (ContactGroupSipImpl) group;
         oldParentGroup.removeContact(contact);
 
         boolean wasContactPersistent = contact.isPersistent();
@@ -688,8 +694,10 @@ public class ServerStoredContactListSipImpl
                 if (!contact.isResolved() && contact.isPersistent())
                 {
                     contact.setResolved(true);
+                    List<ContactGroup> groups = contact.getParentContactGroup();
+                    ContactGroup group = groups.isEmpty() ? null : groups.get(0);
                     ContactGroupSipImpl parentGroup = ((ContactGroupSipImpl)
-                            contact.getParentContactGroup());
+                        group);
                     // If contact is xcap.resolved and is not on the server we
                     // delete it
                     if (contact.isXCapResolved())

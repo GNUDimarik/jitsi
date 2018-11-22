@@ -382,82 +382,85 @@ public class MetaContactListSource
         }
 
         final Contact sourceContact = evt.getSourceContact();
-        final MetaContact metaContact
-            = GuiActivator.getContactListService().findMetaContactByContact(
+        final List<MetaContact> metaContacts
+            = GuiActivator.getContactListService().findMetaContactsByContact(
                     sourceContact);
 
-        if (metaContact == null)
+        if (metaContacts.isEmpty())
             return;
 
         boolean uiContactCreated = false;
 
         UIContactImpl uiContact;
 
-        synchronized (metaContact)
+        for (MetaContact metaContact : metaContacts)
         {
-            uiContact = getUIContact(metaContact);
-
-            if (uiContact == null)
+            synchronized (metaContact)
             {
-                uiContact = createUIContact(metaContact);
-                uiContactCreated = true;
-            }
-        }
+                uiContact = getUIContact(metaContact);
 
-        ContactListFilter currentFilter
-            = GuiActivator.getContactList().getCurrentFilter();
-
-        if (uiContactCreated)
-        {
-            if (currentFilter != null && currentFilter.isMatching(uiContact))
-            {
-                MetaContactGroup parentGroup
-                    = metaContact.getParentMetaContactGroup();
-
-                UIGroup uiGroup = null;
-
-                if (!MetaContactListSource.isRootGroup(parentGroup))
+                if (uiContact == null)
                 {
-                    synchronized (parentGroup)
+                    uiContact = createUIContact(metaContact);
+                    uiContactCreated = true;
+                }
+            }
+
+            ContactListFilter currentFilter
+                = GuiActivator.getContactList().getCurrentFilter();
+
+            if (uiContactCreated)
+            {
+                if (currentFilter != null && currentFilter.isMatching(uiContact))
+                {
+                    MetaContactGroup parentGroup
+                        = metaContact.getParentMetaContactGroup();
+
+                    UIGroup uiGroup = null;
+
+                    if (!MetaContactListSource.isRootGroup(parentGroup))
                     {
-                        uiGroup = MetaContactListSource.getUIGroup(parentGroup);
-                        if (uiGroup == null)
-                            uiGroup = MetaContactListSource
-                                .createUIGroup(parentGroup);
+                        synchronized (parentGroup)
+                        {
+                            uiGroup = MetaContactListSource.getUIGroup(parentGroup);
+                            if (uiGroup == null)
+                                uiGroup = MetaContactListSource
+                                    .createUIGroup(parentGroup);
+                        }
+                    }
+
+                    if (logger.isDebugEnabled())
+                        logger.debug(
+                            "Add matching contact due to status change: "
+                            + uiContact.getDisplayName());
+
+                    GuiActivator.getContactList()
+                        .addContact(uiContact, uiGroup, true, true);
+                }
+                else
+                    removeUIContact(metaContact);
+            }
+            else
+            {
+                if (currentFilter != null
+                    && !currentFilter.isMatching(uiContact))
+                {
+                    if (logger.isDebugEnabled())
+                        logger.debug(
+                            "Remove unmatching contact due to status change: "
+                            + uiContact.getDisplayName());
+                    GuiActivator.getContactList().removeContact(uiContact);
+                }
+                else
+                {
+                    synchronized (uiContact)
+                    {
+                        GuiActivator.getContactList()
+                            .nodeChanged(uiContact.getContactNode());
                     }
                 }
 
-                if (logger.isDebugEnabled())
-                    logger.debug(
-                        "Add matching contact due to status change: "
-                        + uiContact.getDisplayName());
-
-                GuiActivator.getContactList()
-                    .addContact(uiContact, uiGroup, true, true);
             }
-            else
-                removeUIContact(metaContact);
-        }
-        else
-        {
-            if (currentFilter != null
-                && !currentFilter.isMatching(uiContact))
-            {
-                if (logger.isDebugEnabled())
-                    logger.debug(
-                        "Remove unmatching contact due to status change: "
-                        + uiContact.getDisplayName());
-                GuiActivator.getContactList().removeContact(uiContact);
-            }
-            else
-            {
-                synchronized (uiContact)
-                {
-                    GuiActivator.getContactList()
-                        .nodeChanged(uiContact.getContactNode());
-                }
-            }
-
         }
     }
 
@@ -775,8 +778,11 @@ public class MetaContactListSource
                 = MetaContactListSource.getUIContact(metaContact);
         }
 
+        UIGroupImpl uiGroup
+            = MetaContactListSource.getUIGroup(evt.getParentGroup());
+
         if (uiContact != null)
-            GuiActivator.getContactList().removeContact(uiContact);
+            GuiActivator.getContactList().removeContact(uiContact, true, uiGroup);
     }
 
     /**

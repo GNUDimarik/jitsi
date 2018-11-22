@@ -1075,7 +1075,7 @@ public class MclStorageManager
             .getProtocolProvider().getAccountID().getAccountUniqueID());
 
         if(logger.isInfoEnabled()
-                        && protoContact.getParentContactGroup() == null)
+                        && protoContact.getParentContactGroup().isEmpty())
         {
             if (logger.isInfoEnabled())
                 logger.info("the following contact looks weird:" + protoContact);
@@ -1083,11 +1083,14 @@ public class MclStorageManager
                 logger.info("group:" + protoContact.getParentContactGroup());
         }
 
-        if(protoContact.getParentContactGroup() == null)
+        if(protoContact.getParentContactGroup() == null
+            || protoContact.getParentContactGroup().isEmpty())
+        {
             return null;
+        }
 
         protoContactElement.setAttribute(PARENT_PROTO_GROUP_UID_ATTR_NAME,
-            protoContact.getParentContactGroup().getUID());
+            protoContact.getParentContactGroup().get(0).getUID());
 
         // append persistent data child node
         String persistentData = protoContact.getPersistentData();
@@ -2023,8 +2026,20 @@ public class MclStorageManager
         protoNode.getParentNode().removeChild(protoNode);
 
         // update parent attr and append the contact to its new parent node.
-        protoNode.setAttribute(PARENT_PROTO_GROUP_UID_ATTR_NAME, evt
-            .getProtoContact().getParentContactGroup().getUID());
+        List<ContactGroup> groups = evt
+            .getProtoContact().getParentContactGroup();
+        String UID = "";
+
+        for (ContactGroup group : groups)
+        {
+            if (group.getGroupName()
+                .equalsIgnoreCase(protoNode.getAttribute(GROUP_NAME_ATTR_NAME)))
+            {
+                UID = group.getUID();
+            }
+        }
+
+        protoNode.setAttribute(PARENT_PROTO_GROUP_UID_ATTR_NAME, UID);
         newMcNode.appendChild(protoNode);
 
         try

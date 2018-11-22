@@ -31,6 +31,8 @@ import org.jivesoftware.smack.util.*;
 import org.jivesoftware.smackx.packet.*;
 import org.osgi.framework.*;
 
+import mork.Groups;
+
 /**
  * This class encapsulates the Roster class. Once created, it will
  * register itself as a listener to the encapsulated Roster and modify it's
@@ -212,6 +214,28 @@ public class ServerStoredContactListJabberImpl
      */
     void fireGroupEvent(ContactGroupJabberImpl group, int eventID)
     {
+        fireGroupEvent(group, null, eventID);
+    }
+
+    void fireContactRemovedFromGroup(ContactGroup group,
+                                     ContactJabberImpl contact)
+    {
+        if (findContactGroup(contact).size() <= 0)
+        {
+            fireContactRemoved(group, contact);
+        }
+        else
+        {
+            fireGroupEvent(
+                group, contact,
+                ServerStoredGroupEvent.GROUP_CONTACT_REMOVED_EVENT);
+        }
+
+    }
+
+    void fireGroupEvent(ContactGroup group, Contact contact,
+        int eventID)
+    {
         //bail out if no one's listening
         if(parentOperationSet == null){
             if (logger.isDebugEnabled())
@@ -224,7 +248,8 @@ public class ServerStoredContactListJabberImpl
                 , eventID
                 , parentOperationSet.getServerStoredContactListRoot()
                 , jabberProvider
-                , parentOperationSet);
+                , parentOperationSet
+                , contact);
 
         if (logger.isTraceEnabled())
             logger.trace("Will dispatch the following grp event: " + evt);
@@ -270,9 +295,10 @@ public class ServerStoredContactListJabberImpl
                 listener.groupCreated(evt);
             else if (eventID == ServerStoredGroupEvent.GROUP_RESOLVED_EVENT)
                 listener.groupResolved(evt);
+            else if (eventID == ServerStoredGroupEvent.GROUP_CONTACT_REMOVED_EVENT)
+                listener.contactRemoved(evt);
         }
     }
-
     /**
      * Make the parent persistent presence operation set dispatch a contact
      * removed event.
@@ -338,8 +364,9 @@ public class ServerStoredContactListJabberImpl
      * @return a reference to the ContactGroupJabberImpl instance we're looking for
      * or null if no such group was found.
      */
-    public ContactGroupJabberImpl findContactGroup(String name)
+    public List<ContactGroupJabberImpl> findContactGroup(String name)
     {
+        List<ContactGroupJabberImpl> groups = new ArrayList<>();
         Iterator<ContactGroup> contactGroups = rootGroup.subgroups();
 
         // make sure we ignore any whitespaces
@@ -351,10 +378,10 @@ public class ServerStoredContactListJabberImpl
                 = (ContactGroupJabberImpl) contactGroups.next();
 
             if (contactGroup.getGroupName().trim().equals(name))
-                return contactGroup;
+                groups.add(contactGroup);
         }
 
-        return null;
+        return groups;
     }
 
     /**
@@ -432,10 +459,11 @@ public class ServerStoredContactListJabberImpl
      * <tt>contact</tt> or <tt>null</tt> if no such groupo or contact
      * exist.
      */
-    public ContactGroup findContactGroup(ContactJabberImpl child)
+    public List<ContactGroup> findContactGroup(ContactJabberImpl child)
     {
         Iterator<ContactGroup> contactGroups = rootGroup.subgroups();
         String contactAddress = child.getAddress();
+        List<ContactGroup> groups = new ArrayList<>();
 
         while(contactGroups.hasNext())
         {
@@ -443,13 +471,13 @@ public class ServerStoredContactListJabberImpl
                 = (ContactGroupJabberImpl)contactGroups.next();
 
             if( contactGroup.findContact(contactAddress)!= null)
-                return contactGroup;
+                groups.add(contactGroup);
         }
 
         if ( rootGroup.findContact(contactAddress) != null)
-            return rootGroup;
+            groups.add(rootGroup);
 
-        return null;
+        return groups;
     }
 
     /**
@@ -674,11 +702,17 @@ public class ServerStoredContactListJabberImpl
     synchronized ContactGroupJabberImpl createUnresolvedContactGroup(
         String groupName)
     {
-        ContactGroupJabberImpl existingGroup = findContactGroup(groupName);
+        List<ContactGroupJabberImpl> existingGroups = findContactGroup(groupName);
 
-        if( existingGroup != null)
+        if(!existingGroups.isEmpty())
         {
-            return existingGroup;
+            for (ContactGroupJabberImpl group : existingGroups)
+            {
+                if (group.getGroupName().equals(groupName))
+                {
+                    return group;
+                }
+            }
         }
 
         ContactGroupJabberImpl newUnresolvedGroup =
@@ -704,15 +738,21 @@ public class ServerStoredContactListJabberImpl
         if (logger.isTraceEnabled())
             logger.trace("Creating group: " + groupName);
 
-        ContactGroupJabberImpl existingGroup = findContactGroup(groupName);
+        List<ContactGroupJabberImpl> existingGroups = findContactGroup(groupName);
 
-        if( existingGroup != null && existingGroup.isPersistent() )
+        if( !existingGroups.isEmpty())
         {
-            if (logger.isDebugEnabled())
-                logger.debug("ContactGroup " + groupName + " already exists.");
-            throw new OperationFailedException(
-                           "ContactGroup " + groupName + " already exists.",
-                OperationFailedException.CONTACT_GROUP_ALREADY_EXISTS);
+            for (ContactGroupJabberImpl existingGroup : existingGroups)
+            {
+                if (existingGroup.isPersistent())
+                {
+                    if (logger.isDebugEnabled())
+                        logger.debug("ContactGroup " + groupName + " already exists.");
+                    throw new OperationFailedException(
+                                   "ContactGroup " + groupName + " already exists.",
+                        OperationFailedException.CONTACT_GROUP_ALREADY_EXISTS);
+                }
+            }
         }
 
         RosterGroup newRosterGroup = roster.createGroup(groupName);
@@ -897,7 +937,7 @@ public class ServerStoredContactListJabberImpl
         presenceChangeListener.storeEvents();
         this.roster.addRosterListener(presenceChangeListener);
         this.roster.setSubscriptionMode(Roster.SubscriptionMode.manual);
-
+        rosterChangeListener = new ChangeListener();
         initRoster();
 
         // roster has been requested and dispatched, mark this
@@ -910,7 +950,6 @@ public class ServerStoredContactListJabberImpl
 
         presenceChangeListener.processStoredEvents();
 
-        rosterChangeListener = new ChangeListener();
         this.roster.addRosterListener(rosterChangeListener);
     }
 
@@ -972,14 +1011,13 @@ public class ServerStoredContactListJabberImpl
      */
     private synchronized void initRoster()
     {
-        // first if unfiled entries will move them in a group
-        if(roster.getUnfiledEntryCount() > 0)
+        for (RosterEntry item : roster.getEntries())
         {
-            for (RosterEntry item : roster.getUnfiledEntries())
-            {
-                ContactJabberImpl contact =
-                    findContactById(item.getUser());
+            ContactJabberImpl contact =
+                findContactById(item.getUser());
 
+            if (item.getGroups().isEmpty())
+            {
                 // some services automatically add contacts from their
                 // addressbook to the roster and those contacts are
                 // with subscription none. If such already exist,
@@ -988,16 +1026,20 @@ public class ServerStoredContactListJabberImpl
                 {
                     if(contact != null)
                     {
-                        ContactGroup parent = contact.getParentContactGroup();
+                        List<ContactGroup> parents =
+                            contact.getParentContactGroup();
 
-                        if(parent instanceof RootContactGroupJabberImpl)
-                            ((RootContactGroupJabberImpl)parent)
-                                .removeContact(contact);
-                        else
-                            ((ContactGroupJabberImpl)parent)
-                                .removeContact(contact);
+                        for (ContactGroup parent : parents)
+                        {
+                            if(parent instanceof RootContactGroupJabberImpl)
+                                ((RootContactGroupJabberImpl)parent)
+                                    .removeContact(contact);
+                            else
+                                ((ContactGroupJabberImpl)parent)
+                                    .removeContact(contact);
 
-                        fireContactRemoved(parent, contact);
+                            fireContactRemovedFromGroup(parent, contact);
+                        }
                     }
                     continue;
                 }
@@ -1012,17 +1054,21 @@ public class ServerStoredContactListJabberImpl
                 }
                 else
                 {
-                    ContactGroup group = contact.getParentContactGroup();
-                    if(!rootGroup.equals(group))
-                    {
-                        contactMoved(group, rootGroup, contact);
-                    }
-                    // if contact exist so resolve it
-                    contact.setResolved(item);
+                    List<ContactGroup> groups = contact.getParentContactGroup();
 
-                    //fire an event saying that the unfiled contact has been
-                    //resolved
-                    fireContactResolved(rootGroup, contact);
+                    for (ContactGroup group : groups)
+                    {
+                        if(!rootGroup.equals(group))
+                        {
+                            contactMoved(group, rootGroup, contact);
+                        }
+                        // if contact exist so resolve it
+                        contact.setResolved(item);
+
+                        //fire an event saying that the unfiled contact has been
+                        //resolved
+                        fireContactResolved(rootGroup, contact);
+                    }
                 }
 
                 try
@@ -1042,122 +1088,33 @@ public class ServerStoredContactListJabberImpl
                     logger.error("Error processing presence", t);
                 }
             }
+            else
+            {
+                if (contact != null)
+                {
+                    List<ContactGroup> groups = findContactGroup(contact);
+
+                    for (ContactGroup contactGroup : groups)
+                    {
+                        rosterChangeListener.
+                            checkAndRemoveGroups(item, contactGroup, contact);
+                    }
+                }
+
+                rosterChangeListener.checkAndCreateNestedGroups(item);
+            }
         }
 
         // now search all root contacts for unresolved ones
-        Iterator<Contact> iter = rootGroup.contacts();
-        List<ContactJabberImpl> contactsToRemove
-            = new ArrayList<ContactJabberImpl>();
-        while(iter.hasNext())
+
+        Iterator<ContactGroup> subgroups = rootGroup.subgroups();
+
+        while (subgroups.hasNext())
         {
-            ContactJabberImpl contact = (ContactJabberImpl)iter.next();
-            if(!contact.isResolved())
-            {
-                contactsToRemove.add(contact);
-            }
+            checkContacts(subgroups.next());
         }
 
-        for(ContactJabberImpl contact : contactsToRemove)
-        {
-            rootGroup.removeContact(contact);
-
-            fireContactRemoved(rootGroup, contact);
-        }
-        contactsToRemove.clear();
-
-        for (RosterGroup item : roster.getGroups())
-        {
-            ContactGroupJabberImpl group =
-                findContactGroup(item.getName());
-            if(group != null)
-            {
-                // the group exist so just resolved. The group will check and
-                // create or resolve its entries
-                group.setResolved(item);
-
-                //fire an event saying that the group has been resolved
-                fireGroupEvent(group
-                               , ServerStoredGroupEvent.GROUP_RESOLVED_EVENT);
-            }
-        }
-
-        Iterator<ContactGroup> iterGroups = rootGroup.subgroups();
-        List<ContactGroupJabberImpl> groupsToRemove
-            = new ArrayList<ContactGroupJabberImpl>();
-        while(iterGroups.hasNext())
-        {
-            ContactGroupJabberImpl group =
-                (ContactGroupJabberImpl)iterGroups.next();
-
-            // skip non persistent groups
-            if(!group.isPersistent())
-                continue;
-
-            if(!group.isResolved())
-            {
-                groupsToRemove.add(group);
-            }
-
-            Iterator<Contact> iterContacts = group.contacts();
-            while(iterContacts.hasNext())
-            {
-                ContactJabberImpl contact =
-                    (ContactJabberImpl)iterContacts.next();
-                if(!contact.isResolved())
-                {
-                    contactsToRemove.add(contact);
-                }
-            }
-            for(ContactJabberImpl contact : contactsToRemove)
-            {
-                group.removeContact(contact);
-
-                fireContactRemoved(group, contact);
-            }
-            contactsToRemove.clear();
-        }
-
-        for(ContactGroupJabberImpl group: groupsToRemove)
-        {
-            rootGroup.removeSubGroup(group);
-
-            fireGroupEvent(
-                group, ServerStoredGroupEvent.GROUP_REMOVED_EVENT);
-        }
-
-
-        // fill in root group
-        for (RosterGroup item : roster.getGroups())
-        {
-            ContactGroupJabberImpl group =
-                findContactGroup(item.getName());
-
-            if(group == null)
-            {
-                // create the group as it doesn't exist
-                ContactGroupJabberImpl newGroup = new ContactGroupJabberImpl(
-                    item, item.getEntries().iterator(), this, true);
-
-                rootGroup.addSubGroup(newGroup);
-
-                //tell listeners about the added group
-                fireGroupEvent(newGroup
-                               , ServerStoredGroupEvent.GROUP_CREATED_EVENT);
-
-                // if presence was already received it,
-                // we must check & dispatch it
-                if(roster != null)
-                {
-                    Iterator<Contact> cIter = newGroup.contacts();
-                    while(cIter.hasNext())
-                    {
-                        String address = cIter.next().getAddress();
-                        parentOperationSet.firePresenceStatusChanged(
-                            roster.getPresence(address));
-                    }
-                }
-            }
-        }
+        checkContacts(rootGroup);
     }
 
     /**
@@ -1305,45 +1262,109 @@ public class ServerStoredContactListJabberImpl
      */
     private void contactDeleted(ContactJabberImpl contact)
     {
-        ContactGroup group = findContactGroup(contact);
+        List<ContactGroup> groups = findContactGroup(contact);
 
-        if(group == null)
+        for (ContactGroup group : groups)
         {
-            if (logger.isTraceEnabled())
-                logger.trace("Could not find ParentGroup for deleted entry:"
-                            + contact.getAddress());
-            return;
-        }
-
-        if(group instanceof ContactGroupJabberImpl)
-        {
-            ContactGroupJabberImpl groupImpl
-                = (ContactGroupJabberImpl)group;
-
-            // remove the contact from parrent group
-            groupImpl.removeContact(contact);
-
-            // if the group is empty remove it from
-            // root group. This group will be removed
-            // from server if empty
-            if (groupImpl.countContacts() == 0)
+            if(group == null)
             {
-                rootGroup.removeSubGroup(groupImpl);
-
-                fireContactRemoved(groupImpl, contact);
-                fireGroupEvent(groupImpl,
-                           ServerStoredGroupEvent.GROUP_REMOVED_EVENT);
+                if (logger.isTraceEnabled())
+                    logger.trace("Could not find ParentGroup for deleted entry:"
+                                + contact.getAddress());
+                return;
             }
-            else
-                fireContactRemoved(groupImpl, contact);
+
+            if(group instanceof ContactGroupJabberImpl)
+            {
+                ContactGroupJabberImpl groupImpl
+                    = (ContactGroupJabberImpl)group;
+
+                // remove the contact from parrent group
+                groupImpl.removeContact(contact);
+
+                // if the group is empty remove it from
+                // root group. This group will be removed
+                // from server if empty
+                if (groupImpl.countContacts() == 0)
+                {
+                    rootGroup.removeSubGroup(groupImpl);
+
+                    fireContactRemoved(groupImpl, contact);
+                    fireGroupEvent(groupImpl,
+                               ServerStoredGroupEvent.GROUP_REMOVED_EVENT);
+                }
+                else
+                    fireContactRemoved(groupImpl, contact);
+            }
+            else if(group instanceof RootContactGroupJabberImpl)
+            {
+                rootGroup.removeContact(contact);
+
+                fireContactRemoved(rootGroup, contact);
+            }
         }
-        else if(group instanceof RootContactGroupJabberImpl)
+    }
+
+    private void checkContacts(ContactGroup contactGroup)
+    {
+        ArrayList<ContactJabberImpl> contactsToRemove
+            = new ArrayList<ContactJabberImpl>();
+        Iterator<Contact> iter = contactGroup.contacts();
+
+        while(iter.hasNext())
         {
-            rootGroup.removeContact(contact);
-
-            fireContactRemoved(rootGroup, contact);
+            ContactJabberImpl contact = (ContactJabberImpl)iter.next();
+            if(!contact.isResolved() ||
+                roster.getEntry(contact.getAddress()) == null)
+            {
+                contactsToRemove.add(contact);
+            }
         }
 
+        for(ContactJabberImpl contact : contactsToRemove)
+        {
+            if (contactGroup instanceof ContactGroupJabberImpl)
+            {
+                ((ContactGroupJabberImpl)contactGroup).removeContact(contact);
+            }
+            else if (contactGroup instanceof RootContactGroupJabberImpl)
+            {
+                ((RootContactGroupJabberImpl)contactGroup).removeContact(contact);
+            }
+
+            fireContactRemoved(contactGroup, contact);
+        }
+
+        contactsToRemove.clear();
+
+        for (RosterGroup item : roster.getGroups())
+        {
+            List<ContactGroupJabberImpl> groups =
+                findContactGroup(item.getName());
+            if(!groups.isEmpty())
+            {
+                for (ContactGroupJabberImpl group : groups)
+                {
+                    // the group exist so just resolved. The group will check and
+                    // create or resolve its entries
+                    group.setResolved(item);
+
+                    //fire an event saying that the group has been resolved
+                    fireGroupEvent(group
+                                   , ServerStoredGroupEvent.GROUP_RESOLVED_EVENT);
+                }
+            }
+        }
+
+        if (contactGroup.countContacts() == 0)
+        {
+            if (!(contactGroup instanceof RootContactGroupJabberImpl))
+            {
+                rootGroup.removeSubGroup((ContactGroupJabberImpl) contactGroup);
+                fireGroupEvent((ContactGroupJabberImpl) contactGroup
+                               , ServerStoredGroupEvent.GROUP_REMOVED_EVENT);
+            }
+        }
     }
     /**
      * Receives changes in roster.
@@ -1373,7 +1394,12 @@ public class ServerStoredContactListJabberImpl
 
             for (String id : addresses)
             {
-                addEntryToContactList(id);
+                RosterEntry entry = roster.getEntry(id);
+
+                if (entry != null)
+                {
+                    checkAndCreateNestedGroups(entry);
+                }
             }
         }
 
@@ -1388,7 +1414,8 @@ public class ServerStoredContactListJabberImpl
          * @param rosterEntryID the entry id.
          * @return the newly created contact.
          */
-        private ContactJabberImpl addEntryToContactList(String rosterEntryID)
+        private ContactJabberImpl addEntryToContactList(
+                                                        String rosterEntryID)
         {
             RosterEntry entry = roster.getEntry(rosterEntryID);
 
@@ -1412,19 +1439,22 @@ public class ServerStoredContactListJabberImpl
                 }
                 else if(contact instanceof VolatileContactJabberImpl)
                 {
-                    ContactGroup oldParentGroup =
+                    List<ContactGroup> oldParentGroups =
                         contact.getParentContactGroup();
                     // if contact is in 'not in contact list'
                     // we must remove it from there in order to correctly
                     // process adding contact
                     // this happens if we accept subscribe request
                     // not from sip-communicator
-                    if(oldParentGroup instanceof ContactGroupJabberImpl
-                        && !oldParentGroup.isPersistent())
+                    for (ContactGroup oldParentGroup : oldParentGroups)
                     {
-                        ((ContactGroupJabberImpl)oldParentGroup)
-                            .removeContact(contact);
-                        fireContactRemoved(oldParentGroup, contact);
+                        if(oldParentGroup instanceof ContactGroupJabberImpl
+                            && !oldParentGroup.isPersistent())
+                        {
+                            ((ContactGroupJabberImpl)oldParentGroup)
+                                .removeContact(contact);
+                            fireContactRemoved(oldParentGroup, contact);
+                        }
                     }
                 }
                 else
@@ -1448,13 +1478,16 @@ public class ServerStoredContactListJabberImpl
 
             for (RosterGroup group : entry.getGroups())
             {
-                ContactGroupJabberImpl parentGroup =
+                List<ContactGroupJabberImpl> parentGroups =
                     findContactGroup(group.getName());
 
-                if(parentGroup != null)
+                if(!parentGroups.isEmpty())
                 {
-                    parentGroup.addContact(contact);
-                    fireContactAdded(findContactGroup(contact), contact);
+                    for (ContactGroupJabberImpl parentGroup : parentGroups)
+                    {
+                        parentGroup.addContact(contact);
+                        fireContactAdded(parentGroup, contact);
+                    }
                 }
                 else
                 {
@@ -1522,131 +1555,239 @@ public class ServerStoredContactListJabberImpl
             {
                 RosterEntry entry = roster.getEntry(contactID);
 
-                ContactJabberImpl contact = addEntryToContactList(contactID);
+                ContactJabberImpl contact = findContactById(contactID);
 
-                if(entry.getGroups().size() == 0)
+                if (contact == null)
                 {
-                    // check for change in display name
-                    checkForRename(entry.getName(), contact);
-
-                    ContactGroup contactGroup =
-                        contact.getParentContactGroup();
-
-                    if(!rootGroup.equals(contactGroup))
-                    {
-                        contactMoved(contactGroup, rootGroup, contact);
-                    }
+                    contact = addEntryToContactList(contactID);
                 }
+
+                if (contact == null)
+                {
+                    return;
+                }
+
+                // check for change in display name
+                checkForRename(entry.getName(), contact);
 
                 for (RosterGroup gr : entry.getGroups())
                 {
-                    ContactGroup cgr = findContactGroup(gr.getName());
-                    if(cgr == null)
+                    List<ContactGroup> cgrs =
+                        findContactGroup(contact);
+
+                    for (ContactGroup group : cgrs)
                     {
-                        // such group does not exist. so it must be
-                        // renamed one
-                        ContactGroupJabberImpl group =
-                            findContactGroupByNameCopy(gr.getName());
-                        if(group != null)
+                        if (!entryGroupsContainsGroup(entry, group.getGroupName()))
                         {
-                            // just change the source entry
-                            group.setSourceGroup(gr);
-
-                            fireGroupEvent(group,
-                                   ServerStoredGroupEvent.GROUP_RENAMED_EVENT);
-                        }
-                        else
-                        {
-                            // the group was renamed on different location
-                            // so we do not have it at our side
-                            // now lets find the group for the contact
-                            // and rename it,
-                            // - if it is the only contact in
-                            // the group this is rename, otherwise it is move
-                            ContactGroup currentParentGroup =
-                                contact.getParentContactGroup();
-
-                            if(currentParentGroup.countContacts() > 1)
+                            if (cgrs.size() == 1
+                                && !cgrs.get(0).getGroupName()
+                                    .equals(rootGroup.getGroupName()))
                             {
-                                cgr = currentParentGroup;
+                                contactMoved(cgrs.get(0), rootGroup, contact);
                             }
                             else
                             {
-                                // make sure this group name is not present
-                                // in entry groups
-                                boolean present = false;
-                                for (RosterGroup entryGr : entry.getGroups())
-                                {
-                                    if(entryGr.getName().equals(
-                                            currentParentGroup.getGroupName()))
-                                    {
-                                        present = true;
-                                        break;
-                                    }
-                                }
-
-                                if(!present
-                                    && currentParentGroup instanceof
-                                            ContactGroupJabberImpl)
-                                {
-                                    ContactGroupJabberImpl currentGroup =
-                                        (ContactGroupJabberImpl)
-                                            currentParentGroup;
-                                    currentGroup.setSourceGroup(gr);
-
-                                    fireGroupEvent(
-                                        currentGroup,
-                                        ServerStoredGroupEvent
-                                            .GROUP_RENAMED_EVENT);
-                                }
+                                fireContactRemovedFromGroup(group, contact);
                             }
                         }
                     }
 
-                    if(cgr != null)
+                    if (!groupsContainsRosterGroup(gr, contact))
                     {
-                        // the group is found the contact may be moved from
-                        // one group to another
-                        ContactGroup contactGroup =
-                            contact.getParentContactGroup();
+                        createGroup(entry, gr, contact);
+                    }
+                    else
+                    {
+                        contact.setResolved(entry);
+                    }
+                }
 
-                        if(!gr.getName().equals(contactGroup.getGroupName()))
+                if(entry.getGroups().isEmpty())
+                {
+                    List<ContactGroup> contactGroups =
+                        contact.getParentContactGroup();
+
+                    for (ContactGroup contactGroup : contactGroups)
+                    {
+                        if(!rootGroup.equals(contactGroup))
                         {
-
-                            // the add it to the new one
-                            ContactGroupJabberImpl newParentGroup =
-                                findContactGroup(gr.getName());
-
-                            // the new parent group maybe missing
-                            if(newParentGroup == null)
-                            {
-                                // create the group as it doesn't exist
-                                newParentGroup =
-                                    new ContactGroupJabberImpl(
-                                        gr,
-                                        new ArrayList<RosterEntry>().iterator(),
-                                        ServerStoredContactListJabberImpl.this,
-                                        true);
-
-                                rootGroup.addSubGroup(newParentGroup);
-
-                                //tell listeners about the added group
-                                fireGroupEvent(newParentGroup,
-                                    ServerStoredGroupEvent.GROUP_CREATED_EVENT);
-                            }
-
-                            contactMoved(contactGroup, newParentGroup, contact);
+                            contactMoved(contactGroup, rootGroup, contact);
                         }
-                        else
-                        {
-                            // check for change in display name
-                            checkForRename(entry.getName(), contact);
-                        }
+
+                        checkAndRemoveGroups(entry, contactGroup, contact);
                     }
                 }
             }
         }
 
+        public synchronized void checkAndCreateNestedGroups(RosterEntry entry)
+        {
+            ContactJabberImpl contact =
+                addEntryToContactList(entry.getUser());
+
+            if (contact == null)
+            {
+                return;
+            }
+
+            for (RosterGroup gr : entry.getGroups())
+            {
+                List<ContactGroup> ourGroups = findContactGroup(contact);
+                boolean found = false;
+
+                for (ContactGroup ourGroup : ourGroups)
+                {
+                    if (ourGroup.getGroupName().equals(gr.getName()))
+                    {
+                        ContactGroupJabberImpl cgj =
+                            (ContactGroupJabberImpl) ourGroup;
+                        cgj.addContact(contact);
+                        fireContactAdded(cgj, contact);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    ContactGroupJabberImpl cgj =
+                        (ContactGroupJabberImpl) rootGroup.getGroup(gr.getName());
+
+                    if (cgj == null)
+                    {
+                        cgj = new ContactGroupJabberImpl(
+                            gr,
+                            gr.getEntries().iterator(),
+                            ServerStoredContactListJabberImpl.this,
+                            true);
+                        rootGroup.addSubGroup(cgj);
+                        fireGroupEvent(cgj,
+                            ServerStoredGroupEvent.GROUP_CREATED_EVENT);
+
+                        Iterator<Contact> createdContacts = cgj.contacts();
+
+                        while (createdContacts.hasNext())
+                        {
+                            ContactJabberImpl c =
+                                (ContactJabberImpl) createdContacts.next();
+                            c.setResolved(entry);
+                            removeContactFromRootGroup(c);
+                        }
+                    }
+                    else
+                    {
+                        contact.setResolved(entry);
+                        cgj.addContact(contact);
+                        fireContactAdded(cgj, contact);
+                        removeContactFromRootGroup(contact);
+                    }
+                }
+            }
+        }
+
+        public void createGroup(RosterEntry entry,
+            RosterGroup gr, ContactJabberImpl contact)
+        {
+            ContactGroupJabberImpl cgj =
+                (ContactGroupJabberImpl)
+                    rootGroup.getGroup(gr.getName());
+
+            if (cgj == null)
+            {
+                cgj = new ContactGroupJabberImpl(
+                    gr,
+                    gr.getEntries().iterator(),
+                    ServerStoredContactListJabberImpl.this,
+                    true);
+                rootGroup.addSubGroup(cgj);
+                fireGroupEvent(cgj,
+                    ServerStoredGroupEvent.GROUP_CREATED_EVENT);
+
+                Iterator<Contact> createdContacts = cgj.contacts();
+
+                while (createdContacts.hasNext())
+                {
+                    ContactJabberImpl c =
+                        (ContactJabberImpl) createdContacts.next();
+                    c.setResolved(entry);
+                    removeContactFromRootGroup(c);
+                }
+            }
+        }
+
+        public void checkAndRemoveGroups(RosterEntry entry,
+            ContactGroup contactGroup, ContactJabberImpl contact)
+        {
+            boolean remoteGroupFound = false;
+            for (RosterGroup group : entry.getGroups())
+            {
+                if (group.getName()
+                    .equals(contactGroup.getGroupName()))
+                {
+                    remoteGroupFound = true;
+                    break;
+                }
+            }
+
+            if (!remoteGroupFound)
+            {
+                if (contactGroup instanceof ContactGroupJabberImpl)
+                {
+                    ContactGroupJabberImpl jcg
+                        = (ContactGroupJabberImpl) contactGroup;
+                    jcg.removeContact(contact);
+                    fireContactRemovedFromGroup(jcg, contact);
+
+                    if (jcg.countContacts() == 0)
+                    {
+                        rootGroup.removeSubGroup(jcg);
+                        fireGroupEvent(jcg,
+                            contact,
+                            ServerStoredGroupEvent.GROUP_REMOVED_EVENT);
+                    }
+                }
+            }
+        }
+
+        private void removeContactFromRootGroup(ContactJabberImpl contact)
+        {
+            if (rootGroup.getContact(contact.getAddress()) != null)
+            {
+                rootGroup.removeContact(contact);
+                fireGroupEvent(rootGroup, contact,
+                    ServerStoredGroupEvent.GROUP_CONTACT_REMOVED_EVENT);
+            }
+        }
+
+        private boolean entryGroupsContainsGroup(RosterEntry entry,
+            String groupName)
+        {
+            for (RosterGroup group : entry.getGroups())
+            {
+                if (group.getName().equals(groupName))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private boolean groupsContainsRosterGroup(RosterGroup rg,
+            ContactJabberImpl contact)
+        {
+            List<ContactGroup> groups = findContactGroup(contact);
+
+            for (ContactGroup group : groups)
+            {
+                if (group.getGroupName().equals(rg.getName()))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
         /**
          * Checks the entry and the contact whether the display name has changed.
          * @param newValue new display name value
@@ -1691,7 +1832,69 @@ public class ServerStoredContactListJabberImpl
                     continue;
                 }
 
-                contactDeleted(contact);
+                List<ContactGroup> groups = findContactGroup(contact);
+
+                if (!groups.isEmpty())
+                {
+                    for (ContactGroup group : groups)
+                    {
+                        if (group instanceof ContactGroupJabberImpl)
+                        {
+                            ContactGroupJabberImpl jg
+                                = (ContactGroupJabberImpl) group;
+                            jg.removeContact(contact);
+                            fireContactRemovedFromGroup(jg, contact);
+
+                            // Move manually moved to custom groups contacts
+                            // to root group if server's group is empty and
+                            // hence manually moved contact shown in the
+                            // group locally only
+
+                            Iterator<Contact> contacts = jg.contacts();
+
+                            while (contacts.hasNext())
+                            {
+                                ContactJabberImpl jabberContact =
+                                    (ContactJabberImpl) contacts.next();
+                                RosterEntry entry =
+                                    roster.getEntry(jabberContact.getAddress());
+
+                                if (entry != null)
+                                {
+                                    if (!entryGroupsContainsGroup(entry,
+                                        jg.getGroupName()))
+                                    {
+                                        contactMoved(jg, rootGroup, jabberContact);
+                                    }
+
+                                    if (jg.countContacts() == 0)
+                                    {
+                                        rootGroup.removeSubGroup(jg);
+                                        fireGroupEvent(jg,
+                                            ServerStoredGroupEvent.GROUP_REMOVED_EVENT);
+                                    }
+                                }
+                                else
+                                {
+                                    if (logger.isTraceEnabled())
+                                    {
+                                        logger.trace("Could not find contact for entry:"
+                                                    + jabberContact.getAddress());
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            rootGroup.removeContact(contact);
+                            fireContactRemoved(rootGroup, contact);
+                        }
+                    }
+                }
+                else
+                {
+                    contactDeleted(contact);
+                }
             }
         }
 

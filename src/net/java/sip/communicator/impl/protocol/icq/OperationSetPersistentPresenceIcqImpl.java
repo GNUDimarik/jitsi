@@ -1137,13 +1137,18 @@ public class OperationSetPersistentPresenceIcqImpl
                         if(!oldContactStatus.isOnline())
                             continue;
 
+                        List<ContactGroup> groups =
+                            contact.getParentContactGroup();
+                        ContactGroup parentGroup = groups.isEmpty()
+                            ? null : groups.get(0);
+
                         if(parentProvider.USING_ICQ)
                         {
                             contact.updatePresenceStatus(IcqStatusEnum.OFFLINE);
 
                             fireContactPresenceStatusChangeEvent(
                                   contact
-                                , contact.getParentContactGroup()
+                                , parentGroup
                                 , oldContactStatus, IcqStatusEnum.OFFLINE);
                         }
                         else
@@ -1152,7 +1157,7 @@ public class OperationSetPersistentPresenceIcqImpl
 
                             fireContactPresenceStatusChangeEvent(
                                   contact
-                                , contact.getParentContactGroup()
+                                , parentGroup
                                 , oldContactStatus, AimStatusEnum.OFFLINE);
                         }
                     }
@@ -1600,10 +1605,14 @@ public class OperationSetPersistentPresenceIcqImpl
                        continue;
 
                     sourceContact.updatePresenceStatus(newStatus);
+                    List<ContactGroup> groups =
+                        sourceContact.getParentContactGroup();
+                    ContactGroup parentGroup = groups.isEmpty()
+                        ? null : groups.get(0);
 
                     fireContactPresenceStatusChangeEvent(
                         sourceContact,
-                        sourceContact.getParentContactGroup(),
+                        parentGroup,
                         oldStatus,
                         newStatus);
 

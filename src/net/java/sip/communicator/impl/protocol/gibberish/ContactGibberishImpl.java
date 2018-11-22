@@ -17,6 +17,9 @@
  */
 package net.java.sip.communicator.impl.protocol.gibberish;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import net.java.sip.communicator.service.protocol.*;
 
 /**
@@ -173,9 +176,11 @@ public class ContactGibberishImpl
      * @return a reference to the <tt>ContactGroupGibberishImpl</tt> that
      * contains this contact.
      */
-    public ContactGroup getParentContactGroup()
+    public List<ContactGroup> getParentContactGroup()
     {
-        return this.parentGroup;
+        List<ContactGroup> groups = new ArrayList<>();
+        groups.add(this.parentGroup);
+        return groups;
     }
 
     /**

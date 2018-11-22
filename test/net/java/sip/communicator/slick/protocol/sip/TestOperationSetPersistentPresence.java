@@ -577,5 +577,9 @@ public class TestOperationSetPersistentPresence
                 notifyAll();
             }
         }
+
+        @Override
+        public void contactRemoved(ServerStoredGroupEvent evt)
+        {}
     }
 }

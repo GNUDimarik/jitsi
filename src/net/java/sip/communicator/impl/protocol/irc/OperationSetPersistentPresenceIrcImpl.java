@@ -227,8 +227,10 @@ public class OperationSetPersistentPresenceIrcImpl
                 "contact must be instance of ContactIrcImpl");
         }
         final ContactIrcImpl ircContact = (ContactIrcImpl) contact;
+        final List<ContactGroup> groups = ircContact.getParentContactGroup();
+        final ContactGroup group = groups.isEmpty() ? null : groups.get(0);
         final ContactGroupIrcImpl parentGroup =
-            (ContactGroupIrcImpl) ircContact.getParentContactGroup();
+            (ContactGroupIrcImpl) group;
         try
         {
             final IrcConnection connection =
@@ -337,8 +339,14 @@ public class OperationSetPersistentPresenceIrcImpl
         }
         final ContactIrcImpl contact = (ContactIrcImpl) contactToMove;
         // remove contact from old parent contact group
-        ((ContactGroupIrcImpl) contact.getParentContactGroup())
-            .removeContact(contact);
+        final List<ContactGroup> groups = contact.getParentContactGroup();
+        final ContactGroup group = groups.isEmpty() ? null : groups.get(0);
+
+        if (group != null)
+        {
+            ((ContactGroupIrcImpl) group)
+                .removeContact(contact);
+        }
         // add contact to new parent contact group
         final ContactGroupIrcImpl newGroup = (ContactGroupIrcImpl) newParent;
         newGroup.addContact(contact);
@@ -650,7 +658,8 @@ public class OperationSetPersistentPresenceIrcImpl
                 "Expected contact to be an IRC contact instance.");
         }
         final ContactIrcImpl contactIrc = (ContactIrcImpl) contact;
-        final ContactGroup group = contact.getParentContactGroup();
+        final List<ContactGroup> groups = contact.getParentContactGroup();
+        final ContactGroup group = groups.isEmpty() ? null : groups.get(0);
         final PresenceStatus previous = contactIrc.getPresenceStatus();
         contactIrc.setPresenceStatus(newStatus);
         fireContactPresenceStatusChangeEvent(contact, group, previous);

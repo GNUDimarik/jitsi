@@ -885,13 +885,20 @@ public class TreeContactList
     public void removeContact(  final UIContact contact,
                                 final boolean removeEmptyGroup)
     {
+        removeContact(contact, removeEmptyGroup, null);
+    }
+
+    public void removeContact(  final UIContact contact,
+                                final boolean removeEmptyGroup,
+                                final UIGroupImpl parentContactGroup)
+    {
         if (!SwingUtilities.isEventDispatchThread())
         {
             LowPriorityEventQueue.invokeLater(new Runnable()
             {
                 public void run()
                 {
-                    removeContact(contact, removeEmptyGroup);
+                    removeContact(contact, removeEmptyGroup, parentContactGroup);
                 }
             });
             return;
@@ -900,7 +907,12 @@ public class TreeContactList
         if (!(contact instanceof UIContactImpl))
             return;
 
-        UIGroupImpl parentGroup = (UIGroupImpl) contact.getParentGroup();
+        UIGroupImpl parentGroup = parentContactGroup;
+
+        if (parentGroup == null)
+        {
+            parentGroup = (UIGroupImpl) contact.getParentGroup();
+        }
 
         if (parentGroup == null)
             return;

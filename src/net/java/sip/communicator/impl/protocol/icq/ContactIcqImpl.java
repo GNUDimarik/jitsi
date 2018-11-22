@@ -216,9 +216,11 @@ public class ContactIcqImpl
      * a child of or null if the underlying protocol does not suppord persistent
      * presence.
      */
-    public ContactGroup getParentContactGroup()
+    public List<ContactGroup> getParentContactGroup()
     {
-        return ssclCallback.findContactGroup(this);
+        List<ContactGroup> groups = new ArrayList<>();
+        groups.add(ssclCallback.findContactGroup(this));
+        return groups;
     }
 
 

@@ -1368,10 +1368,15 @@ public class OperationSetPersistentPresenceJabberImpl
         if (logger.isDebugEnabled())
             logger.debug("Will Dispatch the contact status event.");
 
-        fireContactPresenceStatusChangeEvent(
-            contact, contact.getParentContactGroup(),
-            oldStatus, newStatus,
-            resourceUpdated);
+        List<ContactGroup> groups = contact.getParentContactGroup();
+
+        for (ContactGroup group : groups)
+        {
+            fireContactPresenceStatusChangeEvent(
+                contact, group,
+                oldStatus, newStatus,
+                resourceUpdated);
+        }
     }
 
     /**

@@ -3121,9 +3121,13 @@ public class ChatRoomJabberImpl
         // When status changes this may be related to a change in the
         // available resources.
         ((ContactJabberImpl)contact).updatePresenceStatus(offlineStatus);
+        List<ContactGroup> groups = contact.getParentContactGroup();
 
-        presenceOpSet.fireContactPresenceStatusChangeEvent(contact,
-            contact.getParentContactGroup(),
-            oldContactStatus, offlineStatus);
+        for (ContactGroup group : groups)
+        {
+            presenceOpSet.fireContactPresenceStatusChangeEvent(contact,
+                group,
+                oldContactStatus, offlineStatus);
+        }
     }
 }

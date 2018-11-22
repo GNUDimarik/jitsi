@@ -121,9 +121,11 @@ public class MockContact
      * Returns the group that contains this contact.
      * @return a reference to the MockContactGroup that contains this contact.
      */
-    public ContactGroup getParentContactGroup()
+    public List<ContactGroup> getParentContactGroup()
     {
-        return this.parentGroup;
+        List<ContactGroup> groups = new ArrayList<>();
+        groups.add(this.parentGroup);
+        return groups;
     }
 
     /**

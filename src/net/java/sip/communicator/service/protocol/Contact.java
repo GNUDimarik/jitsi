@@ -78,7 +78,7 @@ public interface Contact
      * a child of or null if the underlying protocol does not support persistent
      * presence.
      */
-    public ContactGroup getParentContactGroup();
+    public List<ContactGroup> getParentContactGroup();
 
     /**
      * Returns a reference to the protocol provider that created the contact.

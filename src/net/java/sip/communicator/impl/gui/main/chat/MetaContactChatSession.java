@@ -572,14 +572,25 @@ public class MetaContactChatSession
         if(defaultContact == null)
             return false;
 
-        ContactGroup parent = defaultContact.getParentContactGroup();
+        List<ContactGroup> parents = defaultContact.getParentContactGroup();
 
         boolean isParentPersist = true;
         boolean isParentResolved = true;
-        if(parent != null)
+
+        if(parents != null && !parents.isEmpty())
         {
-            isParentPersist = parent.isPersistent();
-            isParentResolved = parent.isResolved();
+            for (ContactGroup parent : parents)
+            {
+                isParentPersist = parent.isPersistent();
+                isParentResolved = parent.isResolved();
+
+                // if at least one group is not persistent or not resolved
+                // let's think all are the same
+                if (!parent.isPersistent() || !parent.isResolved())
+                {
+                    break;
+                }
+            }
         }
 
         if(!defaultContact.isPersistent() &&

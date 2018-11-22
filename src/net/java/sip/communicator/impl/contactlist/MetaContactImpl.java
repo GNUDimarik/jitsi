@@ -229,8 +229,19 @@ public class MetaContactImpl
 
         for (Contact contact : protoContacts)
         {
-            if(contact.getParentContactGroup() == parentProtoGroup)
-                providerContacts.add( contact );
+            List<ContactGroup> groups = contact.getParentContactGroup();
+
+            for (ContactGroup group : groups)
+            {
+                if (group != null && parentProtoGroup != null)
+                {
+                    if(group.getGroupName()
+                        .equals(parentProtoGroup.getGroupName()))
+                    {
+                        providerContacts.add( contact );
+                    }
+                }
+            }
         }
 
         return providerContacts.iterator();
@@ -860,11 +871,15 @@ public class MetaContactImpl
         while(contactsIter.hasNext())
         {
             Contact contact = contactsIter.next();
+            List<ContactGroup> groups = contact.getParentContactGroup();
 
-            if (contact.getParentContactGroup() == protoGroup)
+            for (ContactGroup group : groups)
             {
-                contactsIter.remove();
-                modified = true;
+                if (group.getGroupName().equals(protoGroup.getGroupName()))
+                {
+                    contactsIter.remove();
+                    modified = true;
+                }
             }
         }
 

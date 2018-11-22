@@ -17,6 +17,9 @@
  */
 package net.java.sip.communicator.impl.protocol.irc;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import net.java.sip.communicator.service.protocol.*;
 
 /**
@@ -162,9 +165,11 @@ public class ContactIrcImpl
      * @return returns parent contact group
      */
     @Override
-    public ContactGroup getParentContactGroup()
+    public List<ContactGroup> getParentContactGroup()
     {
-        return this.parentGroup;
+        List<ContactGroup> groups = new ArrayList<>();
+        groups.add(this.parentGroup);
+        return groups;
     }
 
     /**

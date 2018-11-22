@@ -60,11 +60,16 @@ public class ServerStoredGroupEvent
      */
     public static final int GROUP_CREATION_FAILED_EVENT = 5;
 
+    /**
+     * Indicates that contact removed from group.
+     */
+    public static final int GROUP_CONTACT_REMOVED_EVENT = 6;
 
     private int eventID = -1;
     private ProtocolProviderService sourceProvider = null;
     private OperationSetPersistentPresence parentOperationSet = null;
     private ContactGroup parentGroup = null;
+    private Contact contact = null;
 
 
     /**
@@ -90,6 +95,21 @@ public class ServerStoredGroupEvent
         this.parentGroup = parentGroup;
     }
 
+    public ServerStoredGroupEvent(ContactGroup sourceGroup,
+        int eventID,
+        ContactGroup parentGroup,
+        ProtocolProviderService sourceProvider,
+        OperationSetPersistentPresence opSet,
+        Contact contact)
+    {
+        super(sourceGroup);
+
+        this.eventID = eventID;
+        this.sourceProvider = sourceProvider;
+        this.parentOperationSet = opSet;
+        this.parentGroup = parentGroup;
+        this.contact = contact;
+    }
     /**
      * Returns a reference to the <tt>ContactGroup</tt> that this event is
      * pertaining to.
@@ -100,6 +120,15 @@ public class ServerStoredGroupEvent
         return (ContactGroup)getSource();
     }
 
+    /**
+     * Returns a reference to the <tt>Contact</tt> that was removed if
+     * this is a <tt>GROUP_CONTACT_REMOVED_EVENT</tt>
+     * @return a reference to the Contact which was removed from the group
+     */
+    public Contact getSourceContact()
+    {
+        return contact;
+    }
     /**
      * Returns an int describing the cause of this event.
      * @return an int describing the cause of this event.
@@ -152,6 +181,9 @@ public class ServerStoredGroupEvent
         buff.append(getEventID());
         buff.append(" SourceGroup=");
         buff.append(getSource());
+        buff.append("]");
+        buff.append(" SourceContact=");
+        buff.append(getSourceContact());
         buff.append("]");
 
         return buff.toString();

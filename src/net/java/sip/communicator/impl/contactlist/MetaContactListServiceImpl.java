@@ -681,8 +681,27 @@ public class MetaContactListServiceImpl
                 + " is not an instance of MetaContactGroupImpl");
         }
 
-        MetaContactImpl newMetaContact = new MetaContactImpl();
+        /*OperationSetPersistentPresence presenceOpSet
+            = provider
+                .getOperationSet(OperationSetPersistentPresence.class);
 
+        Contact contact =
+            presenceOpSet.findContactByID(contactID);
+
+        if (contact != null)
+        {
+            MetaContactGroupImpl mcGroup =
+                (MetaContactGroupImpl) metaContactGroup;
+
+            MetaContact mc = mcGroup.findMetaContactByContact(contact);
+
+            if (mc != null)
+            {
+                return mc;
+            }
+        }*/
+
+        MetaContactImpl newMetaContact = new MetaContactImpl();
         this.addNewContactToMetaContact(provider, metaContactGroup,
             newMetaContact, contactID, false);
             //don't fire a PROTO_CONT_ADDED event we'll
@@ -1028,10 +1047,15 @@ public class MetaContactListServiceImpl
         //its new metacontact group parent then move it
         try
         {
-            if(contact.getParentContactGroup() != parentProtoGroup
-                && opSetPresence != null)
+            List<ContactGroup> groups = contact.getParentContactGroup();
+
+            for (ContactGroup group : groups)
             {
-                opSetPresence.moveContactToGroup(contact, parentProtoGroup);
+                if(!group.getGroupName().equals(parentProtoGroup.getGroupName())
+                    && opSetPresence != null)
+                {
+                    opSetPresence.moveContactToGroup(contact, parentProtoGroup);
+                }
             }
 
             // remove the proto-contact only if move is successful
@@ -1161,10 +1185,15 @@ public class MetaContactListServiceImpl
         //its new metacontact group parent then move it
         try
         {
-            if(contact.getParentContactGroup() != parentProtoGroup
-                && opSetPresence != null)
+            List<ContactGroup> groups = contact.getParentContactGroup();
+
+            for (ContactGroup group : groups)
             {
-                opSetPresence.moveContactToGroup(contact, parentProtoGroup);
+                if(!group.getGroupName().equals(parentProtoGroup.getGroupName())
+                    && opSetPresence != null)
+                {
+                    opSetPresence.moveContactToGroup(contact, parentProtoGroup);
+                }
             }
 
             // remove the proto-contact only if move is successful
@@ -1647,6 +1676,10 @@ public class MetaContactListServiceImpl
         return rootMetaGroup.findMetaContactByContact(contact);
     }
 
+    public List<MetaContact> findMetaContactsByContact(Contact contact)
+    {
+        return rootMetaGroup.findMetaContactsByContact(contact);
+    }
     /**
      * Returns the MetaContact containing a contact with an address equal to
      * <tt>contactAddress</tt> and with a source provider matching
@@ -2493,6 +2526,13 @@ public class MetaContactListServiceImpl
                 return;
             }
 
+            if (parentGroup.findMetaContactByContact(evt.getSourceContact())
+                != null)
+            {
+                logger.warn("Ignoring contact duplicate");
+                return;
+            }
+
             MetaContactImpl newMetaContact = new MetaContactImpl();
 
             newMetaContact.addProtoContact(evt.getSourceContact());
@@ -2993,6 +3033,25 @@ public class MetaContactListServiceImpl
                 , evt.getSourceGroup()
                 , MetaContactGroupEvent.CONTACT_GROUP_RENAMED_IN_META_GROUP);
         }
+
+        @Override
+        public void contactRemoved(ServerStoredGroupEvent evt)
+        {
+            if (logger.isTraceEnabled())
+                logger.trace("Contact removed: " + evt);
+
+            MetaContactGroupImpl metaContactGroup = (MetaContactGroupImpl)
+                findMetaContactGroupByContactGroup(evt.getSourceGroup());
+
+            MetaContactImpl metaContact = (MetaContactImpl)
+                metaContactGroup.findMetaContactByContact(evt.getSourceContact());
+
+            metaContactGroup.removeMetaContact(metaContact);
+
+            fireMetaContactEvent(metaContact,
+                                 metaContactGroup,
+                                 MetaContactEvent.META_CONTACT_REMOVED);
+        }
     }
 
     /**
@@ -3296,21 +3355,41 @@ public class MetaContactListServiceImpl
         for (MclStorageManager.StoredProtoContactDescriptor contactDescriptor
                 : protoContacts)
         {
-            //this contact has already been registered by another meta contact
-            //so we'll ignore it. If this is the only contact in the meta
-            //contact, we'll throw an exception at the end of the method and
-            //cause the mcl storage manager to remove it.
-            MetaContact mc = findMetaContactByContact(
-                contactDescriptor.contactAddress, accountID);
+            ContactGroup parent = contactDescriptor.parentProtoGroup;
 
-            if(mc != null)
+            if (parent == null)
             {
-                logger.warn("Ignoring duplicate proto contact "
-                            + contactDescriptor
-                            + " accountID=" + accountID
-                            + ". The contact was also present in the "
-                            + "folloing meta contact:" + mc);
-                continue;
+                parent = presenceOpSet.getServerStoredContactListRoot();
+            }
+
+            Contact contact =
+                presenceOpSet.findContactByID(contactDescriptor.contactAddress);
+
+            if (contact != null)
+            {
+                List<MetaContact> mcList = this.findMetaContactsByContact(contact);
+                boolean found = false;
+
+                for (MetaContact mc : mcList)
+                {
+                    if (mc != null &&
+                        mc.getParentMetaContactGroup().getGroupName()
+                            .equals(parent.getGroupName()))
+                    {
+                        logger.warn("Ignoring duplicate proto contact "
+                                     + contactDescriptor
+                                     + " accountID=" + accountID
+                                     + ". The contact was also present in the "
+                                     + "folloing meta contact: ");
+                         found = true;
+                         break;
+                    }
+                }
+
+                if (found)
+                {
+                    continue;
+                }
             }
 
             Contact protoContact = presenceOpSet.createUnresolvedContact(
@@ -3484,6 +3563,14 @@ public class MetaContactListServiceImpl
                 }
             }
         }
+
+        /**
+         * Evens delivered through this method are ignored
+         * @param event param ignored
+         */
+        @Override
+        public void contactRemoved(ServerStoredGroupEvent evt)
+        {}
     }
 
     /**
@@ -3634,6 +3721,14 @@ public class MetaContactListServiceImpl
                 }
             }
         }
+
+        /**
+         * Events delivered through this method are ignored
+         * @param event param ignored
+         */
+        @Override
+        public void contactRemoved(ServerStoredGroupEvent evt)
+        {}
     }
 
     /**

@@ -194,14 +194,17 @@ public class MockPersistentPresenceOperationSet
     {
         MockContact mockContact = (MockContact)contactToMove;
 
-        MockContactGroup parentMockGroup = findContactParent(mockContact);
+        List<MockContactGroup> parentMockGroups = findContactParent(mockContact);
 
-        parentMockGroup.removeContact(mockContact);
+        for (MockContactGroup parentMockGroup : parentMockGroups)
+        {
+            parentMockGroup.removeContact(mockContact);
 
-        ((MockContactGroup)newParent).addContact(mockContact);
+            ((MockContactGroup)newParent).addContact(mockContact);
 
-        /** @todo fire an event (we probably need to create a new family of
-         * move events) */
+            /** @todo fire an event (we probably need to create a new family of
+             * move events) */
+        }
     }
 
     /**
@@ -263,9 +266,11 @@ public class MockPersistentPresenceOperationSet
     {
         PresenceStatus oldStatus = contact.getPresenceStatus();
         contact.setPresenceStatus(newStatus);
+        List<MockContactGroup> groups = findContactParent(contact);
+        MockContactGroup group = groups.isEmpty() ? null : groups.get(0);
 
         fireContactPresenceStatusChangeEvent(
-                contact, findContactParent(contact), oldStatus);
+                contact, group, oldStatus);
     }
 
     /**
@@ -287,9 +292,17 @@ public class MockPersistentPresenceOperationSet
      * @return the MockContactGroup instance that mockContact belongs to or null
      * if no parent was found.
      */
-    public MockContactGroup findContactParent(MockContact mockContact)
+    public List<MockContactGroup> findContactParent(MockContact mockContact)
     {
-        return (MockContactGroup)mockContact.getParentContactGroup();
+        List<ContactGroup> groups = mockContact.getParentContactGroup();
+        List<MockContactGroup> mockGroups = new ArrayList<>();
+
+        for (ContactGroup group : groups)
+        {
+            mockGroups.add((MockContactGroup) group);
+        }
+
+        return mockGroups;
     }
 
 
@@ -427,14 +440,19 @@ public class MockPersistentPresenceOperationSet
     public void unsubscribe(Contact contact) throws IllegalArgumentException,
         IllegalStateException, OperationFailedException
     {
-        MockContactGroup parentGroup = (MockContactGroup) contact
+        List<ContactGroup> parentGroups = contact
             .getParentContactGroup();
 
-        parentGroup.removeContact((MockContact)contact);
+        for (ContactGroup parentGroup : parentGroups)
+        {
+            ((MockContactGroup) parentGroup).removeContact((MockContact)contact);
+            List<ContactGroup> groups = contact.getParentContactGroup();
+            ContactGroup group = groups.isEmpty() ? null : groups.get(0);
 
-        fireSubscriptionEvent(contact,
-                                       contact.getParentContactGroup(),
-                                       SubscriptionEvent.SUBSCRIPTION_REMOVED);
+            fireSubscriptionEvent(contact,
+                                           group,
+                                           SubscriptionEvent.SUBSCRIPTION_REMOVED);
+        }
     }
 
     /**
